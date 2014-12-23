@@ -1,4 +1,4 @@
-> module Custom.Data.BinaryTree
+> module Custom.Data.BinarySearchTree
 >     ( Tree
 >     , empty
 >     , insert
