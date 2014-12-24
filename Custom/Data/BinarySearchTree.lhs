@@ -4,6 +4,7 @@
 >     , insert
 >     , find
 >     , remove
+>     , fromList
 >     )
 > where
 
@@ -13,6 +14,11 @@ this module have the same names like functions in Prelude, we will
 import it qualified.
 
 > import qualified Data.Foldable as Fold
+
+We will make our tree an instance of the monoid type class.  Thats why
+we import Data.Monoid.
+
+> import qualified Data.Monoid as Mono
 
 We want to describe what a tree is.  It tree consists of nodes that
 are either leafs or branches.  A leaf is a node with no children and
@@ -176,3 +182,114 @@ the subtree that is most left and remove its root.
 >     removeRoot node
 > removeSmallest (Branch x left right) =
 >     (Branch x (removeSmallest left) right)
+
+We want to make our binary search tree data type an instance of the
+monoid type class.
+
+> instance (Ord a) => Mono.Monoid (Tree a) where
+
+The neutral element of the monoid is the empty tree, because we an empty tree added to any tree x is x.
+
+>       mempty = empty
+
+Now we define what it means two "add" two trees.  We define the
+mappend operation as merging two binary search trees into one.
+
+>       mappend = mergeTrees
+
+That leaves us with the question how we define the mergeTrees
+operation.  We want to make this operation as stable as possible.  The
+general idea of this is that we generate two sorted lists of the trees
+we want to merge and then generate a new (balanced) tree from the two
+lists.
+
+> mergeTrees :: (Ord a) => Tree a -> Tree a -> Tree a
+> mergeTrees t1 t2 =
+>     treeFromSortedList (mergeSortedLists (Fold.toList t1)
+>                                          (Fold.toList t2)
+>                        )
+
+Now we have to define what it means to merge two sorted lists.  The
+merge operation is a function that takes two (sorted) lists and
+returns one list that contains all elements of the two lists in
+ascending order.
+
+> mergeSortedLists :: (Ord a) => [a] -> [a] -> [a]
+
+Note that we will not check if the lists are actually sorted.  A list
+merged with an empty list is the list itself.
+
+> mergeSortedLists xs [] = xs
+> mergeSortedLists [] ys = ys
+
+In general the merge of two lists is the smaller item of the two heads
+of the lists followed by the merged lists without the selected
+element.
+
+> mergeSortedLists (x:xs) (y:ys)
+>     | x <= y = x:(mergeSortedLists xs (y:ys))
+>     | otherwise = y:(mergeSortedLists (x:xs) (ys))
+
+Now we define what it means to construct a tree from a sorted list.
+The contruction is a function that takes a list and returns a tree
+containing the elements of the list.
+
+> treeFromSortedList :: [a] -> Tree a
+
+A tree contructed from an empty list is just a Leaf.
+
+> treeFromSortedList [] = Leaf
+
+In general our approach is two split the list in half where we select
+the element in the middle of the list as the root node.  All elements
+to the left of the pivot element are assumed to be smaller than the
+pivot so they go to the left subtree and the elements to the right of
+pivot got to the right of the root.
+
+> treeFromSortedList xs =
+>     (Branch pivot (treeFromSortedList lowerHalf)
+>                   (treeFromSortedList upperHalf)
+>     )
+>     where pivot = xs !! (n `div` 2)
+>           lowerHalf = take (n `div` 2) xs
+>           upperHalf = drop ((n `div` 2) + 1) xs
+>           n = length xs
+
+We want to implement a function that takes an unordered list and
+returns a tree.  An intuitive approach would be to fold a list into a
+tree.  This would leed to a unbalanced tree if the list was already
+sorted.  What we do instead is to sort the list with a sorting
+algorithm and contruct a tree by applying treeFromSortedList.  This
+approach leeds to an almost balanced tree.  A tree from an empty list
+is a leaf.
+
+> fromList :: (Ord a) => [a] -> Tree a
+> fromList = treeFromSortedList.mergesort
+
+Now we define our search algorithm mergesort.  We consider empty lists
+and singleton lists to be ordered.
+
+> mergesort :: (Ord a) => [a] -> [a]
+> mergesort [] = []
+> mergesort (x:[]) = [x]
+
+In general we split our list into two sublists and mergesort them.
+
+> mergesort xs =
+>     mergeSortedLists
+>     (mergesort firstSplit)
+>     (mergesort secondSplit)
+>     where (firstSplit, secondSplit) = split xs
+
+So what is split?  We don't want to scan the length of our list
+because this would cost us another itaration over the list.  Instead
+we split the list into the odd and even positioned elements in the
+list.
+
+> split :: [a] -> ([a],[a])
+> split xs = (odds xs, evens xs)
+>     where evens [] = []
+>           evens (x:[]) = []
+>           evens (x:y:rest) = y : evens rest
+>           odds [] = []
+>           odds (x:xs) = x : evens xs
