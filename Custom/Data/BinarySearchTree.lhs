@@ -289,7 +289,7 @@ list.
 > split :: [a] -> ([a],[a])
 > split xs = (odds xs, evens xs)
 >     where evens [] = []
->           evens (x:[]) = []
->           evens (x:y:rest) = y : evens rest
+>           evens (_:[]) = []
+>           evens (_:y:rest) = y : evens rest
 >           odds [] = []
->           odds (x:xs) = x : evens xs
+>           odds (x:rest) = x : evens rest
