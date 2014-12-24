@@ -1,24 +1,82 @@
 > module Custom.Data.BinarySearchTree
 >     ( Tree
->     , empty
->     , insert
->     , find
->     , remove
+>     , emptyTree
+>     , insertTree
+>     , findTree
+>     , removeTree
 >     , fromList
 >     )
 > where
 
 We want to make our Tree an instance of Foldalble, so we have to
-import then module Data.Foldable.  Because a lot of the functions in
-this module have the same names like functions in Prelude, we will
-import it qualified.
+import then module Data.Foldable.
 
-> import qualified Data.Foldable as Fold
+> import Data.Foldable
 
 We will make our tree an instance of the monoid type class.  Thats why
 we import Data.Monoid.
 
-> import qualified Data.Monoid as Mono
+> import Data.Monoid
+
+We will not get around using some stuff from the Prelude so we will
+import the functions that we need and that are not in any other module
+directly from Prelude.
+
+> import Prelude (div,(+))
+
+Because we are working in Haskell we will need some stuff from
+Data.List.
+
+> import Data.List hiding (foldl, foldr)
+
+Because we want to make a binary search tree based on the 'Ord' type
+class we import the Data.Ord package.  Also we want to check stuff for
+equality.  Thats why we need to import Data.Eq.
+
+> import Data.Ord
+> import Data.Eq
+
+We want to derive the show typeclass from the base type of the tree.
+Thats why we import Text.Show.
+
+> import Text.Show
+
+We will make use of guards.  To be compatible with the Haskell
+standard we will use 'otherwise' in these guards.  Otherwise is
+defined in Data.Bool.
+
+> import Data.Bool
+
+The tree we will define behaves as a funtor.  We will instanciate it
+as one.
+
+> import Data.Functor
+
+It is easy to imaging that a tree is traversable from left to right.
+We will implement this later as the Traversable type class.  We will
+need the Applicative type class to implement the traversal.
+
+> import Data.Traversable
+> import Control.Applicative
+
+Some operations on the tree can fail.  We want to use a type class
+that allows failing operations.  To modell this behavior we will use
+monads.  Thats why we import Control.Monad.
+
+> import Control.Monad hiding ( sequence
+>                             , sequence_
+>                             , mapM
+>                             , mapM_
+>                             )
+
+We will work with Maybe.
+
+> import Data.Maybe
+
+We will need some functions from Data.Function, at least the identity
+function.
+
+> import Data.Function
 
 We want to describe what a tree is.  It tree consists of nodes that
 are either leafs or branches.  A leaf is a node with no children and
@@ -32,29 +90,29 @@ only values that are bigger than the value stored in the node.
 
 An empty tree is only a leaf.
 
-> empty :: Tree a
-> empty = Leaf
+> emptyTree :: Tree a
+> emptyTree = Leaf
 
 We can insert a value into an existing tree.  We want to keep our tree
 ordered and thats why we need our values to of a type that is an
 instance of Ord.
 
-> insert :: (Ord a) => a -> Tree a -> Tree a
+> insertTree :: (Ord a) => a -> Tree a -> Tree a
 
 If we find ourselves looking at an empty tree (leaf) than we replace
 it by a branch storing the value to be inserted with two empty
 children.
 
-> insert x Leaf = Branch x Leaf Leaf
+> insertTree x Leaf = Branch x Leaf Leaf
 
 When inserting a value (y) we have to look at the node at the top of
 the tree.  When the value stored in then node (y) is smaller than x
 then we know that have to add x to the right tree and otherwise we
 have to add the value to the left tree.
 
-> insert x (Branch y left right)
->     | x > y = Branch y left (insert x right)
->     | otherwise = Branch y (insert x left) right
+> insertTree x (Branch y left right)
+>     | x > y = Branch y left (insertTree x right)
+>     | otherwise = Branch y (insertTree x left) right
 
 When we need to know if a value is stored in the tree then we have to
 look at the top of the tree.  If the value y of the node is equal to
@@ -64,16 +122,16 @@ node and otherwise we look at the left child of node.  If we look at
 an empty tree then we return Nothing because we no that the right
 value is not in the tree.
 
-> find :: (Ord a) => Tree a -> a -> Maybe a
-> find Leaf _ = Nothing
-> find (Branch x left right) y
->     | x == y = Just x
->     | x < y = find right y
->     | otherwise = find left y
+> findTree :: (Ord a, Monad m) => Tree a -> a -> m a
+> findTree Leaf x = fail ("find: Cannot find element in tree")
+> findTree (Branch x left right) y
+>     | x == y = return x
+>     | x < y = findTree right y
+>     | otherwise = findTree left y
 
 We want to define what it means that our tree is foldable.
 
-> instance Fold.Foldable Tree where
+> instance Foldable Tree where
 
 A fold of Leaf is just the starting value.
 
@@ -84,26 +142,26 @@ subtree and the value itself used as arguments for 'f'.  The resulting
 value is the starting value for the fold of the right subtree.
 
 >     foldr f ac (Branch val left right) =
->         Fold.foldr f (f val (Fold.foldr f ac right)) left
+>         foldr f (f val (foldr f ac right)) left
 
 The left fold of a branch is a right fold with the left and the right
 subtree exchanged.
 
 >     foldl _ ac Leaf = ac
 >     foldl f ac (Branch val left right) =
->         Fold.foldl f (f (Fold.foldl f ac left) val) right
+>         foldl f (f (foldl f ac left) val) right
 
 We will now define a remove operation for a tree.  We will only
 implement this function for ordered tree as we need a way to identify
 items.
 
-> remove :: (Ord a) => Tree a -> a -> Tree a
+> removeTree :: (Ord a) => Tree a -> a -> Tree a
 
 We will split the problem of removing an item into two problems.
 First we locate the item in the tree an then we remove the root node
 of this tree.
 
-> remove tree item =
+> removeTree tree item =
 >     doWithSubtree removeRoot tree item
 
 The doWithSubtree takes three arguments:
@@ -112,7 +170,8 @@ The doWithSubtree takes three arguments:
     item - the item that is the root of the subtree to be found
 It returns a new tree.
 
-> doWithSubtree :: (Ord a) => (Tree a -> Tree a) -> Tree a -> a -> Tree a
+> doWithSubtree :: (Ord a) =>
+>                  (Tree a -> Tree a) -> Tree a -> a -> Tree a
 
 When we detect a node that is a leaf we can be sure that the tree does
 not contain the item we are looking for.
@@ -167,11 +226,11 @@ Foldable properties of our tree.  The toList function returns list
 based on a left fold of the tree, so we know that the smallest element
 of the tree is the head of this list.
 
-> findSmallest :: Tree a -> Maybe a
+> findSmallest :: (Monad m) => Tree a -> m a
 > findSmallest tree =
->     case Fold.toList tree of
->       [] -> Nothing
->       x:_ -> Just x
+>     case toList tree of
+>       [] -> fail ("findSmallest: tree is empty")
+>       x:_ -> return x
 
 removeSmallest can be defined in terms of removeRoot.  We will go to
 the subtree that is most left and remove its root.
@@ -186,11 +245,12 @@ the subtree that is most left and remove its root.
 We want to make our binary search tree data type an instance of the
 monoid type class.
 
-> instance (Ord a) => Mono.Monoid (Tree a) where
+> instance (Ord a) => Monoid (Tree a) where
 
-The neutral element of the monoid is the empty tree, because we an empty tree added to any tree x is x.
+The neutral element of the monoid is the empty tree, because we an
+empty tree added to any tree x is x.
 
->       mempty = empty
+>       mempty = emptyTree
 
 Now we define what it means two "add" two trees.  We define the
 mappend operation as merging two binary search trees into one.
@@ -205,8 +265,8 @@ lists.
 
 > mergeTrees :: (Ord a) => Tree a -> Tree a -> Tree a
 > mergeTrees t1 t2 =
->     treeFromSortedList (mergeSortedLists (Fold.toList t1)
->                                          (Fold.toList t2)
+>     treeFromSortedList (mergeSortedLists (toList t1)
+>                                          (toList t2)
 >                        )
 
 Now we have to define what it means to merge two sorted lists.  The
@@ -293,3 +353,32 @@ list.
 >           evens (_:y:rest) = y : evens rest
 >           odds [] = []
 >           odds (x:rest) = x : evens rest
+
+We want to make our binary search tree an instance of the functor type
+class.  A functor has a function fmap that takes a function and
+applies it to a functor.  For our tree that means that we apply the
+function on every element in the tree.
+
+> instance Functor Tree where
+
+A function applied to a leaf is just a leaf because a leave holds no
+data.
+
+>     fmap _ Leaf = Leaf
+
+A function f applied to a Branch is a branch with f applied to the
+item it holds, the left subtree and the right subtree.
+
+>     fmap f (Branch x left right) =
+>         Branch (f x) (fmap f left) (fmap f right)
+
+As we will see a tree is traversable from left to right.  The basic
+idea of the traversal is that when we take a tree and want to traverse
+over the tree, we start by traversing over the left subtree, then the
+item itself and then the right subtree.
+
+> instance Traversable Tree where
+>     traverse f (Branch x left right) =
+>         pure branch <*> traverse f left <*> f x <*> traverse f right
+>         where branch leftSub value rightSub =
+>                   Branch value leftSub rightSub
